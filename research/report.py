@@ -18,10 +18,10 @@ def go_no_go(oos: pd.Series, benchmarks: dict, ci: dict, pbo_value: float | None
     return checks, all(checks.values())
 
 
-def write_report(path, sections: dict) -> Path:
+def write_report(path, sections: dict, title: str = "Phase 1 Research Report") -> Path:
     path = Path(path)
     path.parent.mkdir(parents=True, exist_ok=True)
-    body = ["# Phase 1 Research Report", ""]
+    body = [f"# {title}", ""]
     for title, text in sections.items():
         body += [f"## {title}", "", text, ""]
     path.write_text("\n".join(body), encoding="utf-8")

@@ -28,3 +28,4 @@ Final: fixed I5 deflated Sharpe uses all folds' trials; PBO/DSR not computed und
 Final: fixed I6 run details + walk-forward trades/costs in report - test_walk_forward_reports_trades_and_costs RED->GREEN
 Task 9: complete (full run: 756 symbols, 2021-2026, 60 trials/fold -> verdict NO-GO)
 Final: finding (not fixed): pause brake deadlock - paused at -30% in cash can never recover above -25%, untuned run sat in cash 2023-2026; spec rule defect, needs owner decision
+Follow-up (2026-10-05): pre-registration committed first; pause fix test_pause_ends_after_max_days_with_peak_reset + test_bot_trades_again_after_a_pause RED->GREEN, suite 66/66; BTC+ETH run -> NO-GO (untuned +2.9% CAGR, Sharpe 0.28, DD -25%; PBO 0.40); README drafted for owner review

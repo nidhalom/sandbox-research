@@ -62,13 +62,20 @@ def main(argv=None) -> None:
     ap.add_argument("--first-test-year", type=int, default=2021)
     ap.add_argument("--train-start", default="2019-01-01")
     ap.add_argument("--skip-download", action="store_true")
+    ap.add_argument("--symbols", help="comma-separated universe, e.g. BTCUSDT,ETHUSDT (default: all)")
+    ap.add_argument("--max-single", type=float, help="override the per-coin weight cap")
+    ap.add_argument("--primary", choices=["walkforward", "untuned"], default="walkforward")
+    ap.add_argument("--report", default="phase1", help="report file prefix inside reports/")
+    ap.add_argument("--title", default="Phase 1 Research Report")
     args = ap.parse_args(argv)
 
     if not args.skip_download:
         print("downloading data (cached files are skipped)...")
         download_all(args.data)
     panel = load_panel(args.data)
-    base = Params()
+    if args.symbols:
+        panel = {k: v[args.symbols.split(",")] for k, v in panel.items()}
+    base = Params() if args.max_single is None else replace(Params(), max_single=args.max_single)
     market = build_market(panel, base, load_fear_greed("data/fear_greed.csv"))
     start = f"{args.first_test_year}-01-01"
     last_year = market.close.index[-1].year
@@ -87,14 +94,17 @@ def main(argv=None) -> None:
     enough = len(last_fold) >= MIN_TRIALS_FOR_STATS
     pbo_value = pbo(pd.DataFrame({k: r for k, (_, r) in enumerate(last_fold)})) if enough else None
     dsr = deflated_sharpe(wf.returns, [daily_sr(r) for r in all_trials]) if enough else None
-    ci = bootstrap_ci(wf.returns)
-    checks, go = go_no_go(wf.returns, benchmarks, ci, pbo_value)
+    primary = wf.returns if args.primary == "walkforward" else untuned.returns
+    ci = bootstrap_ci(primary)
+    checks, go = go_no_go(primary, benchmarks, ci, pbo_value)
 
-    strategies = {"Walk-forward tuned (primary)": wf.returns, "Untuned defaults": untuned.returns,
+    wf_name = "Walk-forward tuned" + (" (primary)" if args.primary == "walkforward" else "")
+    un_name = "Untuned defaults" + (" (primary)" if args.primary == "untuned" else "")
+    strategies = {wf_name: wf.returns, un_name: untuned.returns,
                   "Untuned + Fear&Greed filter": greed.returns,
                   "Untuned, stops fill at day's low (worst case)": worst_stops.returns, **benchmarks}
     REPORTS.mkdir(exist_ok=True)
-    chart(strategies, REPORTS / "phase1-equity.png")
+    chart(strategies, REPORTS / f"{args.report}-equity.png")
 
     fmt = {"cagr": "+.1%", "max_dd": ".1%", "sharpe": ".2f"}
     chosen = "\n".join(f"- {y}: windows={p.windows}, atr_mult={p.atr_mult:.2f}, band={p.band:.3f}"
@@ -103,7 +113,7 @@ def main(argv=None) -> None:
     sections = {
         "Verdict": verdict + "\n\n" + "\n".join(f"- {'✅' if ok else '❌'} {name}" for name, ok in checks.items()),
         "Out-of-sample results": table({k: summary(v) for k, v in strategies.items()}, fmt)
-                                 + "\n\n![equity](phase1-equity.png)",
+                                 + f"\n\n![equity]({args.report}-equity.png)",
         "Yearly returns": yearly_table(strategies),
         "Confidence (90%, stationary bootstrap) for the primary strategy":
             f"- CAGR: {ci['cagr'][0]:+.1%} to {ci['cagr'][1]:+.1%}\n"
@@ -131,11 +141,13 @@ def main(argv=None) -> None:
     }
     run_details = (f"- Generated: {dt.datetime.now():%Y-%m-%d %H:%M}\n"
                    f"- Command: run_phase1 --trials {args.trials} --first-test-year {args.first_test_year} "
-                   f"--train-start {args.train_start}\n"
+                   f"--train-start {args.train_start} --primary {args.primary} "
+                   f"--symbols {args.symbols or 'all'} --max-single {base.max_single}\n"
                    f"- Data: {market.close.shape[1]} symbol files, "
                    f"{market.close.index[0].date()} to {market.close.index[-1].date()}\n"
                    f"- Test period: {start} to {market.close.index[-1].date()}")
-    path = write_report(REPORTS / "phase1-report.md", {"Run details": run_details, **sections})
+    path = write_report(REPORTS / f"{args.report}-report.md", {"Run details": run_details, **sections},
+                        title=args.title)
     print(f"report written: {path.resolve()}  verdict: {'GO' if go else 'NO-GO'}")
 
 
