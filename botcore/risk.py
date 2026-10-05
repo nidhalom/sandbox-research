@@ -10,12 +10,15 @@ from botcore.params import Params
 class BrakeState:
     peak: float
     mode: str = "normal"  # normal | half | paused | stopped
+    paused_days: int = 0
 
 
 def update_brakes(state: BrakeState, equity: float, p: Params) -> BrakeState:
     peak = max(state.peak, equity)
     if state.mode == "stopped":
         return BrakeState(peak, "stopped")
+    if state.mode == "paused" and state.paused_days >= p.pause_max_days:
+        return BrakeState(equity, "normal")
     dd = equity / peak - 1
     if dd <= p.brake_stop:
         mode = "stopped"
@@ -25,7 +28,7 @@ def update_brakes(state: BrakeState, equity: float, p: Params) -> BrakeState:
         mode = "half"
     else:
         mode = "normal"
-    return BrakeState(peak, mode)
+    return BrakeState(peak, mode, state.paused_days + 1 if mode == "paused" and state.mode == "paused" else 0)
 
 
 def atr(high: pd.DataFrame, low: pd.DataFrame, close: pd.DataFrame, window: int) -> pd.DataFrame:

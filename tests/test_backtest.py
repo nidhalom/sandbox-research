@@ -97,3 +97,21 @@ def test_benchmarks():
     assert hold.index[0] == pd.Timestamp(START)
     ew = benchmark_equal_weight(m, START)
     assert len(ew) == len(hold) and np.isfinite(ew).all()
+
+
+def test_bot_trades_again_after_a_pause():
+    n = 560
+    idx = pd.date_range("2020-01-01", periods=n)
+    rng = np.random.default_rng(7)
+    r = np.r_[np.full(300, 0.003), [-0.32], np.full(n - 301, 0.006)] + 0.004 * rng.standard_normal(n)
+    close = pd.DataFrame({"AAAUSDT": 100 * np.exp(np.cumsum(np.log1p(r)))}, index=idx)
+    open_ = close.shift(1).fillna(close.iloc[0])
+    open_.iloc[300] = close.iloc[300]  # the crash gaps at the open
+    panel = {"open": open_, "high": np.maximum(open_, close) * 1.002, "low": np.minimum(open_, close) * 0.998,
+             "close": close, "quote_volume": pd.DataFrame(1e8, index=idx, columns=close.columns)}
+    p = Params(min_history_days=120, min_vol=0.01, vol_target=1.0, max_single=1.0, atr_mult=50)
+    res = run_backtest(build_market(panel, p), p, "2020-06-01")
+    w = res.weights["AAAUSDT"]
+    assert w.loc[idx[299]] > 0.9                    # fully invested before the crash
+    assert w.loc[idx[302]:idx[330]].eq(0).all()     # paused in cash right after it
+    assert w.iloc[-1] > 0                           # back in the market later

@@ -47,3 +47,13 @@ def test_trade_cost_formula():
 def test_trade_cost_zero_and_missing_volume():
     assert trade_cost(0, 1e7, P) == 0.0
     assert trade_cost(1000, np.nan, P) == pytest.approx(1000 * (0.001 + 0.0005 + 0.01))
+
+
+def test_pause_ends_after_max_days_with_peak_reset():
+    p = Params(pause_max_days=30)
+    s = update_brakes(BrakeState(peak=100), 69, p)
+    for _ in range(30):
+        s = update_brakes(s, 69, p)
+    assert s.mode == "paused"
+    s = update_brakes(s, 69, p)
+    assert s.mode == "normal" and s.peak == 69

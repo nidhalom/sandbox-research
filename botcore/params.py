@@ -22,6 +22,7 @@ class Params:
     brake_pause: float = -0.30
     brake_stop: float = -0.35
     resume_level: float = -0.25
+    pause_max_days: int = 30  # a pause in cash can never recover on its own; end it after this
     stop_resume_days: int = 30  # backtest stand-in for the owner's manual /resume
     # universe
     universe_size: int = 10
