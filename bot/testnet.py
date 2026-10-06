@@ -32,9 +32,7 @@ ROOT = Path(__file__).resolve().parents[1]
 BASE = "https://testnet.binance.vision"
 SIGNAL_URL = "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=202"
 BASE_W = 0.5
-STATE = ROOT / "bot" / "state.json"   # the strategy's own cash and coins (gitignored)
-FILLS = ROOT / "bot" / "fills.csv"    # every fill (gitignored)
-RUNS = ROOT / "bot" / "runs.csv"      # strategy value at every run (gitignored)
+STATE = ROOT / "bot" / "state.json"   # default state path (tests); real runs use paths_for()
 STEPS = {"BTC": 0.00001, "PAXG": 0.0001, "XAUT": 0.0001}
 
 
@@ -55,14 +53,22 @@ def load_env(path=ROOT / ".env") -> dict:
     return out
 
 
+def paths_for(strategy: str, gold: str) -> dict:
+    """Each strategy keeps its own state and logs (all gitignored), so several can run side by side."""
+    tag = f"{strategy}-{gold}"
+    return {"state": ROOT / "bot" / f"state-{tag}.json", "fills": ROOT / "bot" / f"fills-{tag}.csv",
+            "runs": ROOT / "bot" / f"runs-{tag}.csv"}
+
+
 def signal_weights(closes: pd.Series, gold: str = "PAXG", strategy: str = "brake") -> dict:
-    """Target weights from closed daily candles."""
+    """Target weights from closed daily candles. gold="CASH": the non-BTC part stays in USDT."""
     if strategy == "fixed":
-        return {"BTC": BASE_W, gold: 1.0 - BASE_W}
-    if len(closes) < 200:
-        raise ValueError("need at least 200 closed daily candles")
-    btc = BASE_W if closes.iloc[-1] >= closes.iloc[-200:].mean() else 0.0
-    return {"BTC": btc, gold: 1.0 - btc}
+        btc = BASE_W
+    else:
+        if len(closes) < 200:
+            raise ValueError("need at least 200 closed daily candles")
+        btc = BASE_W if closes.iloc[-1] >= closes.iloc[-200:].mean() else 0.0
+    return {"BTC": btc} if gold == "CASH" else {"BTC": btc, gold: 1.0 - btc}
 
 
 def trading_day_ok(last_closed: pd.Timestamp) -> bool:
@@ -171,8 +177,9 @@ def main(argv=None) -> None:
     ap.add_argument("--live", action="store_true", help="send orders to the Testnet")
     ap.add_argument("--force", action="store_true", help="allow --live on a day the backtest would not trade")
     ap.add_argument("--budget", type=float, default=3000.0, help="USDT the strategy starts with")
-    ap.add_argument("--strategy", choices=("brake", "fixed"), default="brake")
-    ap.add_argument("--gold", choices=("PAXG", "XAUT"), default="PAXG")
+    ap.add_argument("--strategy", choices=("brake", "fixed"), default="fixed")
+    ap.add_argument("--gold", choices=("PAXG", "XAUT", "CASH"), default="CASH",
+                    help="second asset; CASH keeps it in USDT")
     ap.add_argument("--check", action="store_true", help="only test the keys (read-only account call)")
     args = ap.parse_args(argv)
     env = load_env()
@@ -191,7 +198,8 @@ def main(argv=None) -> None:
         return
     if args.live and not (key and secret):
         raise SystemExit("--live needs BINANCE_TESTNET_KEY and BINANCE_TESTNET_SECRET in .env")
-    assets = ("BTC", args.gold)
+    assets = ("BTC",) if args.gold == "CASH" else ("BTC", args.gold)
+    files = paths_for(args.strategy, args.gold)
     closes = btc_daily_closes()
     last = closes.index[-1]
     if args.live and not args.force and not trading_day_ok(last):
@@ -200,7 +208,7 @@ def main(argv=None) -> None:
     targets = signal_weights(closes, args.gold, args.strategy)
     client = Testnet(key or "", secret or "")
     prices = client.prices(assets)
-    state = load_state(STATE, args.budget, assets)
+    state = load_state(files["state"], args.budget, assets)
     holdings, cash = {a: state[a] for a in assets}, state["cash"]
     value = cash + sum(holdings[a] * prices[a] for a in assets)
     now = datetime.now(timezone.utc).strftime("%Y-%m-%d %H:%M:%S")
@@ -217,14 +225,14 @@ def main(argv=None) -> None:
         r = client.market_order(o, f"sbx{int(time.time())}{i}")
         print("  ->", r.get("status"), "filled", r.get("executedQty"), "for", r.get("cummulativeQuoteQty"))
         state = apply_fill(state, o["symbol"], o["side"], r)
-        save_state(STATE, state)  # after every fill, so a failed later order loses nothing
-        append_csv(FILLS, {"utc": now, "symbol": o["symbol"], "side": o["side"], "qty": r.get("executedQty"),
+        save_state(files["state"], state)  # after every fill, so a failed later order loses nothing
+        append_csv(files["fills"], {"utc": now, "symbol": o["symbol"], "side": o["side"], "qty": r.get("executedQty"),
                            "quote": r.get("cummulativeQuoteQty"),
                            "fees": ";".join(f"{f['commission']} {f['commissionAsset']}" for f in r.get("fills", []))})
     if args.live:
         value = state["cash"] + sum(state[a] * prices[a] for a in assets)
-        append_csv(RUNS, {"utc": now, "strategy": args.strategy, "gold": args.gold, "btc_price": prices["BTC"],
-                          "gold_price": prices[args.gold], "btc_target": targets["BTC"], "value_usdt": round(value, 2)})
+        append_csv(files["runs"], {"utc": now, "strategy": args.strategy, "gold": args.gold, "btc_price": prices["BTC"],
+                          "gold_price": prices.get(args.gold, ""), "btc_target": targets["BTC"], "value_usdt": round(value, 2)})
 
 
 if __name__ == "__main__":

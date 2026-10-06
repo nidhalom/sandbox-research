@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bot.testnet import BASE, Testnet, append_csv, apply_fill, load_env, sign, signal_weights, trading_day_ok
+from bot.testnet import BASE, Testnet, append_csv, apply_fill, load_env, paths_for, sign, signal_weights, trading_day_ok
 from botcore.rebalance import plan_orders
 
 PX = {"BTC": 100_000.0, "PAXG": 4_000.0}
@@ -99,3 +99,17 @@ def test_append_csv_writes_header_once(tmp_path):
     append_csv(p, {"a": 1, "b": 2})
     append_csv(p, {"a": 3, "b": 4})
     assert p.read_text().splitlines() == ["a,b", "1,2", "3,4"]
+
+
+def test_cash_mode_targets_btc_only_and_keeps_the_rest_in_usdt():
+    w = signal_weights(pd.Series(np.full(200, 100.0)), gold="CASH", strategy="fixed")
+    assert w == {"BTC": 0.5}
+    orders = plan_orders({"BTC": 0.0}, PX, w, cash=3000.0)
+    assert [(o["symbol"], o["side"]) for o in orders] == [("BTCUSDT", "BUY")]
+    assert orders[0]["quote_qty"] == pytest.approx(1500.0)
+
+
+def test_each_strategy_keeps_its_own_state_and_logs():
+    a, b = paths_for("fixed", "CASH"), paths_for("brake", "PAXG")
+    assert a["state"].name == "state-fixed-CASH.json" and a["fills"].name == "fills-fixed-CASH.csv"
+    assert a["state"] != b["state"] and a["runs"] != b["runs"]
