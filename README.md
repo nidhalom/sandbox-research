@@ -75,14 +75,26 @@ gold history before PAXG (2017–2020) comes from COMEX futures. Report with aud
 [`reports/ideas-report.md`](reports/ideas-report.md).
 
 - **BTC + gold through the 2018 crash: NO-GO** for 30/70, 40/60 and 50/50 (drawdowns −43% to −59%).
-- **Crash brake** (half BTC above its 200-day average, otherwise all gold): **GO, but fragile.** 2019–2026:
-  +34.7% a year, drawdown −35%, Sharpe 1.21 vs 0.96 for holding BTC. Its Sharpe ties the simple 50/50 mix,
-  a one-day delay would fail it, and it relies on gold; the smaller drawdown is the robust part.
+- **Crash brake** (half BTC above its 200-day average, otherwise all gold): **nominal GO, in practice a tie.**
+  2019–2026: +34.7% a year, drawdown −35%, Sharpe 1.21 vs 0.96 for holding BTC, but its Sharpe ties the
+  simple 50/50 mix (1.2062 vs 1.2059) and flips with the start date, costs, check weekday or a one-day
+  delay; it grows about 8 points a year slower than 50/50. Two independent audits (Fable, Opus) agree.
 - **Volatility scaling, plain and AI-forecast: NO-GO.** The AI forecast of volatility was less accurate
   than plain 30-day volatility.
-- **Monthly contributions** lowered the worst case on the owner's plan (informational).
+- **Monthly contributions** lowered the worst case in % terms but also the median gain (informational).
 - **`bot/testnet.py`**: rebalances the crash-brake strategy on the Binance Spot **Testnet** (fake money),
   dry run by default, tracks only its own positions.
+
+### Follow-up: spot grid bot (pre-registered)
+
+Rules in [`docs/specs/2026-10-06-grid-preregistration.md`](docs/specs/2026-10-06-grid-preregistration.md),
+hourly candles 2021–2026. Report: [`reports/grid-report.md`](reports/grid-report.md).
+
+- **NO-GO on every criterion.** Relaunched monthly, the main BTC grid lost **−11.9% a year** (drawdown −70%)
+  while holding BTC made +20%. The median 30-day grid made +2.4%, but gains are capped (average +3.8% when
+  up) while losses are not (average −9.2% when down): a grid sells volatility.
+- Of 2,094 daily launches on BTC and ETH, **none** made the +14% in 5 days shown on the Binance marketplace;
+  the best was +5.5% (BTC) and +8.1% (ETH). Those listings are the luckiest of many bots, often on meme coins.
 
 ## Biases caught along the way
 
@@ -104,7 +116,7 @@ An independent audit of the engine is in [`reports/phase1-audit.md`](reports/pha
 bot/         Binance Spot Testnet rebalancer (fake money)
 botcore/     strategy, risk and cost logic (pure functions, reusable by a live bot)
 research/    data download, universe, backtester, validation, tuning, report
-tests/       103 tests (pytest)
+tests/       115 tests (pytest)
 docs/        design spec, implementation plan, pre-registrations
 reports/     generated reports and charts
 ```
@@ -116,7 +128,7 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows  (source .venv/bin/activate on Linux/macOS)
 pip install -r requirements.txt
 
-pytest -q                          # 103 tests
+pytest -q                          # 115 tests
 
 python -m research.run_phase1 --trials 60          # full study: downloads data, writes reports/phase1-report.md
 python -m research.run_phase1 --skip-download --symbols BTCUSDT,ETHUSDT --max-single 0.5 \
@@ -124,6 +136,7 @@ python -m research.run_phase1 --skip-download --symbols BTCUSDT,ETHUSDT --max-si
 python -m research.run_core                        # BTC + gold core and holding rules
 python -m research.run_ml                          # CPU machine-learning test
 python -m research.run_ideas                       # ideas 1-5 (needs data/gold_gc_yahoo.json)
+python -m research.run_grid                        # spot grid bot study (hourly data)
 python -m bot.testnet                              # Testnet rebalancer, dry run (add --live with Testnet keys)
 ```
 

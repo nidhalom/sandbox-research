@@ -91,3 +91,34 @@ idea 5 GO is.
 What looks real is the smaller drawdown, including through 2018. Treat it as a candidate for Testnet
 paper trading, not as a proven edge. The AI volatility forecast was worse than the simple 30-day
 volatility (error 0.220 vs 0.190).
+
+## Independent audits (Fable 5.1 and Opus, 2026-10-06)
+
+Both auditors rebuilt the key results with their own code: every reported number matched, no
+look-ahead was found, and the NO-GO verdicts for ideas 1, 4 and 4b are robust. Both judge the idea 5
+GO to be **a statistical tie with A1** that flips under small, reasonable changes:
+
+| Change (A1 recomputed under the same change) | Idea 5 Sharpe | A1 Sharpe | Verdict |
+|---|---|---|---|
+| As pre-registered | 1.2062 | 1.2059 | passes |
+| Start 2018-12-31 / 2019-02-01 | 1.2060 / 1.1995 | 1.2104 / 1.2282 | fails / fails |
+| End 2025-12-31 | 1.3119 | 1.3179 | fails |
+| Costs 0.25% instead of 0.15% | 1.1926 | 1.2042 | fails |
+| COMEX futures as gold for the whole period | 1.2124 | 1.2183 | fails |
+| Rebalance on every quarter's first day, drift or not | 1.2052 | 1.2059 | fails |
+| Weekly check on Tue / Wed / Thu / Fri / Sat / Sun | 1.193 / 1.279 / 1.180 / 1.092 / 1.086 / 1.165 | 1.206 | 1 of 6 passes; Thu–Sat also break −40% |
+| 2023–2026 only | 1.367 | 1.468 | fails |
+
+**Revised reading of idea 5: nominal GO, Sharpe tie with A1, about 8 points less growth a year than A1
+(34.7% vs 42.6%). Its only real benefit is the smaller drawdown, and even that depends on the check
+day and the moving-average length.** Correction to the audit table above: the "brake into cash" row
+removed gold entirely (50% BTC + 50% cash, all cash when braking); keeping 50/50 BTC + gold and braking
+into cash gives Sharpe 1.07, drawdown −27.9%.
+
+Idea 3 wording: monthly contributions lowered the worst case in % terms, but the median gain also fell
+(hold BTC 122% → 92%; 50/50 128% → 80%), the worst loss in dollars grew for hold BTC (−$1,467 → −$1,541),
+and there are only 3 independent windows.
+
+Bot fixes made after the audits: fees taken from the asset charged, full exits sold by quantity, order
+lookup instead of re-sending after a timeout, readable error messages, fill and run logs, trade-day guard
+(Monday close or quarter start), exchange clock sync, paths fixed to the repo root.

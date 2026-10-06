@@ -48,3 +48,9 @@ Share of 30-day windows where the grid beat holding the coin: BTCUSDT: Main ±15
 | ETHUSDT Narrow ±7.5%, 25 cells | 0.0% | +0.86% | +6.4% | 2094 |
 | ETHUSDT Wide ±30%, 100 cells | 0.0% | +0.27% | +8.1% | 2094 |
 
+## Why a grid loses although most 30-day grids end positive (main BTC grid)
+
+Mean 30-day return −0.8% against a median of +2.4%: when a grid ends up, it made +3.8% on average (gains are
+capped because the bot sells into rallies and is all cash above its range); when it ends down, it lost −9.2%
+on average (it keeps buying all the way down and holds only coin below its range). Compounded, that is about
+−13% a year. The best 30-day grid made +13.8%, the best 30-day hold +49.8%.
