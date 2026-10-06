@@ -59,3 +59,24 @@ def test_unknown_rule_raises():
     px = frame(A=[1.0])
     with pytest.raises(ValueError):
         simulate(px, {px.index[0]: 1.0}, {"A": 1.0}, rule="monthly")
+
+
+def test_dynamic_rebalances_on_monday_only_when_drift_exceeds_band():
+    idx = pd.date_range("2024-05-01", periods=8, freq="D")      # Wed .. Wed, Monday = 2024-05-06
+    px = pd.DataFrame({"A": 1.0, "B": 1.0}, index=idx)
+    targets = pd.DataFrame({"A": 0.5, "B": 0.5}, index=idx)
+    targets.loc["2024-05-02":, "A"] = 0.2
+    targets["B"] = 1 - targets["A"]
+    out = simulate(px, {idx[0]: 100.0}, {"A": 0.5, "B": 0.5}, rule="dynamic", band=0.05,
+                   targets=targets, cost=0.01)
+    assert out["value"].iloc[4] == pytest.approx(99.0)           # Sunday: no trade yet (deposit cost only)
+    traded = (0.3 + 0.3) * 99.0                                  # Monday: 50/50 -> 20/80
+    assert out["value"].iloc[5] == pytest.approx(99.0 - traded * 0.01)
+
+
+def test_dynamic_deposit_buys_current_targets():
+    idx = pd.date_range("2024-05-01", periods=2, freq="D")
+    px = pd.DataFrame({"A": [1.0, 2.0], "B": [1.0, 1.0]}, index=idx)
+    targets = pd.DataFrame({"A": [0.0, 0.0], "B": [1.0, 1.0]}, index=idx)
+    out = simulate(px, {idx[0]: 100.0}, {"A": 0.5, "B": 0.5}, rule="dynamic", targets=targets, cost=0.0)
+    assert out["value"].iloc[1] == pytest.approx(100.0)          # nothing bought in A
