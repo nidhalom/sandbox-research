@@ -5,3 +5,4 @@ pyarrow>=17
 optuna>=4.0
 matplotlib>=3.9
 pytest>=8.0
+scikit-learn>=1.5
