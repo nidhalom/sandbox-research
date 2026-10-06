@@ -88,3 +88,10 @@ def test_download_symbol_skips_existing(monkeypatch, tmp_path):
     (tmp_path / "BTCUSDT.parquet").write_bytes(b"x")
     monkeypatch.setattr(data, "_get", lambda *a, **k: (_ for _ in ()).throw(AssertionError("no network")))
     assert data.download_symbol("BTCUSDT", tmp_path) == tmp_path / "BTCUSDT.parquet"
+
+
+def test_parse_kline_csv_can_keep_the_hour():
+    from research.data import parse_kline_csv
+    raw = b"1609462800000,1,2,0.5,1.5,0,1609466399999,100,0,0,0,0\n"
+    assert str(parse_kline_csv(raw, normalize=False)["date"].iloc[0]) == "2021-01-01 01:00:00"
+    assert str(parse_kline_csv(raw)["date"].iloc[0]) == "2021-01-01 00:00:00"

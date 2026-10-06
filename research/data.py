@@ -45,13 +45,14 @@ def list_usdt_symbols() -> list[str]:
     return sorted(s for s in (p.rstrip("/").split("/")[-1] for p in prefixes) if s.endswith("USDT"))
 
 
-def parse_kline_csv(raw: bytes) -> pd.DataFrame:
+def parse_kline_csv(raw: bytes, normalize: bool = True) -> pd.DataFrame:
     df = pd.read_csv(io.BytesIO(raw), header=None, dtype=str)
     if not df.iloc[0, 0].isdigit():
         df = df.iloc[1:]
     t = pd.to_numeric(df[0]).astype("int64")
     t = t.where(t < 10**14, t // 1000)  # files from 2025 on use microseconds
-    out = pd.DataFrame({"date": pd.to_datetime(t.values, unit="ms").normalize()})
+    ts = pd.to_datetime(t.values, unit="ms")
+    out = pd.DataFrame({"date": ts.normalize() if normalize else ts})
     for col, name in [(1, "open"), (2, "high"), (3, "low"), (4, "close"), (7, "quote_volume")]:
         out[name] = pd.to_numeric(df[col]).astype(float).values
     return out
@@ -73,6 +74,19 @@ def download_symbol(symbol: str, out_dir: Path) -> Path | None:
     frames = [parse_kline_csv(_csv_from_zip(_get(f"{FILES}/{urllib.parse.quote(k)}"))) for k in zips]
     df = pd.concat(frames).drop_duplicates("date").sort_values("date")
     df.to_parquet(path, index=False)
+    return path
+
+
+def download_hourly(symbol: str, out_dir, since: str = "2020-12") -> Path:
+    """Hourly candles from `since` (YYYY-MM) on, saved as <out_dir>/<symbol>.parquet."""
+    path = Path(out_dir) / f"{symbol}.parquet"
+    if path.exists():
+        return path
+    path.parent.mkdir(parents=True, exist_ok=True)
+    _, keys = _list(f"{KLINE_PREFIX}{symbol}/1h/")
+    zips = sorted(k for k in keys if k.endswith(".zip") and k[-11:-4] >= since)
+    frames = [parse_kline_csv(_csv_from_zip(_get(f"{FILES}/{urllib.parse.quote(k)}")), normalize=False) for k in zips]
+    pd.concat(frames).drop_duplicates("date").sort_values("date").to_parquet(path, index=False)
     return path
 
 
