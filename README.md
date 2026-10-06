@@ -1,8 +1,45 @@
-# Crypto Trend Research Engine
+# Crypto Strategy Research Engine
 
-A research engine that tests whether a systematic trend-following strategy can make money on crypto
-markets **after realistic costs and without the usual backtest biases**. It decides before any capital
-is put at risk, and it is built to say "no" when the evidence says no.
+A research engine that tests whether systematic crypto strategies can make money **after realistic costs
+and without the usual backtest biases**, under strict constraints: spot only, long only, no leverage, no
+futures, no shorting (Shariah-aware). Rules are written down and committed **before** each test, results
+are reported as they come, and key results were checked by independent audits. It is built to say "no"
+when the evidence says no.
+
+## Summary of every experiment
+
+About 20 strategies, tested on survivorship-free Binance data (2017–2026):
+
+| Strategy | Period | CAGR | Max drawdown | Verdict |
+|---|---|---|---|---|
+| Hold BTC (benchmark) | 2017–2026 | +38.5% | −83% | — |
+| Trend following, top-10 coins | 2021–2026 | +1.8% | −39% | NO-GO |
+| Trend following, BTC + ETH | 2021–2026 | +2.9% | −25% | NO-GO |
+| Machine-learning direction model (BTC) | 2020–2026 | +0.5% | −75% | NO-GO (50.2% hit rate) |
+| 50% BTC + 50% gold, quarterly | 2017–2026 | +37.9% | −59% | NO-GO (drawdown) |
+| Crash brake: BTC above 200-day average, else gold | 2019–2026 | +34.7% | −35% | Nominal GO, Sharpe tie with 50/50 |
+| Volatility scaling (plain and AI forecast) | 2019–2026 | +32–35% | −48% to −49% | NO-GO |
+| 50% BTC + 50% cash, quarterly | 2017–2026 | +29.3% | −58% | NO-GO (drawdown) |
+| 30% BTC + 70% cash, quarterly | 2017–2026 | +19.9% | −43% | NO-GO (drawdown) |
+| Ensemble trend basket (Zarattini et al.) | hold-out 2022–2026 | +4.5% | −12% | NO-GO (return) |
+| Funding-rate overlay | hold-out 2022–2026 | — | — | Dropped |
+| Spot grid bot (BTC, monthly relaunch) | 2021–2026 | −11.9% | −70% | NO-GO |
+
+**Conclusion:** with spot-only trading, public data and normal fees, no strategy beat simply holding
+Bitcoin on return. Several made money with much smaller crashes (rebalanced BTC + cash or gold, trend
+filters), so the useful trade-off is risk, not extra profit. Periods differ between rows; see each report.
+An independent literature search reached the same conclusion: no published spot-only strategy clearly beats
+buy-and-hold after costs since 2020.
+
+## Forward test (running)
+
+Since 2026-10-06 the simplest supported strategy, **50% BTC / 50% cash**, runs on the Binance Spot
+**Testnet** with $3,000 of fake money, checked every Tuesday and rebalanced when BTC drifts more than
+5 points. Final evaluation 2027-04-06 against a simulator replay and against holding BTC.
+Rules: [`docs/specs/2026-10-06-testnet-forward-test.md`](docs/specs/2026-10-06-testnet-forward-test.md);
+server deployment: [`bot/DEPLOY.md`](bot/DEPLOY.md).
+
+## Phase 1: the trend engine
 
 **Phase 1 verdict: NO-GO.** A naive test on 10 hand-picked coins showed **+33% a year**. After removing
 survivorship bias, modelling costs realistically and validating out-of-sample, the same idea delivered
@@ -82,8 +119,9 @@ gold history before PAXG (2017–2020) comes from COMEX futures. Report with aud
 - **Volatility scaling, plain and AI-forecast: NO-GO.** The AI forecast of volatility was less accurate
   than plain 30-day volatility.
 - **Monthly contributions** lowered the worst case in % terms but also the median gain (informational).
-- **`bot/testnet.py`**: rebalances the crash-brake strategy on the Binance Spot **Testnet** (fake money),
-  dry run by default, tracks only its own positions.
+- **`bot/testnet.py`**: rebalancer for the Binance Spot **Testnet** (fake money): strategies `fixed` (50/50)
+  or `brake`, second asset PAXG, XAUT or cash; dry run by default, tracks only its own positions, records
+  fees and fills. Now used for the forward test above.
 
 ### Follow-up: BTC + cash, ensemble trend basket, funding-rate overlay (pre-registered)
 
@@ -126,8 +164,8 @@ An independent audit of the engine is in [`reports/phase1-audit.md`](reports/pha
 bot/         Binance Spot Testnet rebalancer (fake money)
 botcore/     strategy, risk and cost logic (pure functions, reusable by a live bot)
 research/    data download, universe, backtester, validation, tuning, report
-tests/       123 tests (pytest)
-docs/        design spec, implementation plan, pre-registrations
+tests/       125 tests (pytest)
+docs/        design spec, plans, pre-registrations, data manifest
 reports/     generated reports and charts
 ```
 
@@ -138,7 +176,7 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows  (source .venv/bin/activate on Linux/macOS)
 pip install -r requirements.txt
 
-pytest -q                          # 123 tests
+pytest -q                          # 125 tests
 
 python -m research.run_phase1 --trials 60          # full study: downloads data, writes reports/phase1-report.md
 python -m research.run_phase1 --skip-download --symbols BTCUSDT,ETHUSDT --max-single 0.5 \
@@ -147,7 +185,10 @@ python -m research.run_core                        # BTC + gold core and holding
 python -m research.run_ml                          # CPU machine-learning test
 python -m research.run_ideas                       # ideas 1-5 (needs data/gold_gc_yahoo.json)
 python -m research.run_grid                        # spot grid bot study (hourly data)
-python -m bot.testnet                              # Testnet rebalancer, dry run (add --live with Testnet keys)
+python -m research.run_cash                        # BTC + cash
+python -m research.run_ensemble                    # ensemble trend basket + funding overlay
+python -m bot.testnet --check                      # test Testnet keys (read-only)
+python -m bot.testnet --strategy fixed --gold CASH # dry run of the forward-test strategy (--live to trade)
 ```
 
 The first run downloads about 35 MB of data from `data.binance.vision`. The full study takes about
