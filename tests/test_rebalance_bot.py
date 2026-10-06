@@ -2,7 +2,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from bot.testnet import BASE, Testnet, load_env, sign, signal_weights
+from bot.testnet import BASE, Testnet, append_csv, apply_fill, load_env, sign, signal_weights, trading_day_ok
 from botcore.rebalance import plan_orders
 
 PX = {"BTC": 100_000.0, "PAXG": 4_000.0}
@@ -48,6 +48,7 @@ def test_signal_follows_200_day_average_on_closed_candles():
     down = pd.Series(np.r_[np.full(199, 100.0), 80.0])
     assert signal_weights(up) == {"BTC": 0.5, "PAXG": 0.5}
     assert signal_weights(down) == {"BTC": 0.0, "PAXG": 1.0}
+    assert signal_weights(down, gold="XAUT") == {"BTC": 0.0, "XAUT": 1.0}
     with pytest.raises(ValueError):
         signal_weights(up.iloc[:150])
 
@@ -64,7 +65,37 @@ def test_strategy_tracks_only_its_own_positions(tmp_path):
     path = tmp_path / "state.json"
     s = load_state(path, budget=3000.0)
     assert s == {"cash": 3000.0, "BTC": 0.0, "PAXG": 0.0}
-    s = apply_fill(s, "BTCUSDT", "BUY", {"executedQty": "0.0175", "cummulativeQuoteQty": "1492.50"})
-    s = apply_fill(s, "BTCUSDT", "SELL", {"executedQty": "0.0075", "cummulativeQuoteQty": "640.00"})
+    s = apply_fill(s, "BTCUSDT", "BUY", {"executedQty": "0.0175", "cummulativeQuoteQty": "1492.50", "fills": []})
+    s = apply_fill(s, "BTCUSDT", "SELL", {"executedQty": "0.0075", "cummulativeQuoteQty": "640.00", "fills": []})
     save_state(path, s)
     assert load_state(path, budget=999.0) == pytest.approx({"cash": 3000.0 - 1492.5 + 640.0, "BTC": 0.01, "PAXG": 0.0})
+
+
+def test_fees_are_taken_from_the_asset_they_are_charged_in():
+    s = {"cash": 1000.0, "BTC": 0.0, "PAXG": 0.0}
+    s = apply_fill(s, "BTCUSDT", "BUY", {"executedQty": "0.01", "cummulativeQuoteQty": "900",
+                                         "fills": [{"commission": "0.00001", "commissionAsset": "BTC"}]})
+    assert s["BTC"] == pytest.approx(0.00999) and s["cash"] == pytest.approx(100.0)
+    s = apply_fill(s, "BTCUSDT", "SELL", {"executedQty": "0.005", "cummulativeQuoteQty": "450",
+                                          "fills": [{"commission": "0.45", "commissionAsset": "USDT"}]})
+    assert s["BTC"] == pytest.approx(0.00499) and s["cash"] == pytest.approx(100.0 + 449.55)
+
+
+def test_full_exit_sells_the_held_quantity_rounded_down_to_the_step():
+    orders = plan_orders({"BTC": 0.0123456, "PAXG": 0.0}, PX, {"BTC": 0.0, "PAXG": 1.0}, cash=0.0,
+                         steps={"BTC": 0.00001, "PAXG": 0.0001})
+    assert orders[0]["side"] == "SELL" and orders[0]["quantity"] == pytest.approx(0.01234)
+    assert "quantity" not in orders[1]
+
+
+def test_bot_only_trades_after_a_monday_or_quarter_start_candle():
+    assert trading_day_ok(pd.Timestamp("2026-10-05"))          # Monday
+    assert trading_day_ok(pd.Timestamp("2026-10-01"))          # first day of a quarter (Thursday)
+    assert not trading_day_ok(pd.Timestamp("2026-10-07"))      # Wednesday
+
+
+def test_append_csv_writes_header_once(tmp_path):
+    p = tmp_path / "log.csv"
+    append_csv(p, {"a": 1, "b": 2})
+    append_csv(p, {"a": 3, "b": 4})
+    assert p.read_text().splitlines() == ["a,b", "1,2", "3,4"]
