@@ -183,8 +183,8 @@ def main(argv=None) -> None:
         try:
             acct = Testnet(key, secret)._call("GET", "/api/v3/account", signed=True)
         except RuntimeError as e:
-            raise SystemExit(f"Keys rejected by the Testnet: {e}
-(-2014/-2015 usually means a real Binance key, "
+            raise SystemExit(f"Keys rejected by the Testnet: {e} "
+                             "(-2014/-2015 usually means a real Binance key, "
                              "which does not work on the Testnet: create one at https://testnet.binance.vision)")
         held = {b["asset"]: b["free"] for b in acct["balances"] if b["asset"] in ("USDT", "BTC", "PAXG", "XAUT")}
         print("Keys work on the Testnet. canTrade:", acct.get("canTrade"), "| balances:", held)
