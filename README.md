@@ -85,6 +85,16 @@ gold history before PAXG (2017–2020) comes from COMEX futures. Report with aud
 - **`bot/testnet.py`**: rebalances the crash-brake strategy on the Binance Spot **Testnet** (fake money),
   dry run by default, tracks only its own positions.
 
+### Follow-up: BTC + cash, ensemble trend basket, funding-rate overlay (pre-registered)
+
+- **BTC + cash** (30/70, 50/50, 70/30, quarterly), verdict on 2017–2020: **NO-GO** on drawdown (−43% to
+  −70%), though every mix beat holding BTC on Sharpe. [`reports/cash-report.md`](reports/cash-report.md)
+- **Ensemble trend basket** (9 breakout lookbacks, top-10 coins, volatility sizing; from Zarattini et al.),
+  hold-out 2022–2026: **NO-GO**. +4.5% a year with only −11.9% drawdown and Sharpe 0.62 (hold BTC +13.3%,
+  −67%, 0.50), but it is ~90% cash on average, so the return is too low.
+- **Funding-rate overlay** (halve exposure when futures funding is extreme; signal only): helped in
+  2020–21, did nothing in the hold-out: **dropped**. [`reports/ensemble-report.md`](reports/ensemble-report.md)
+
 ### Follow-up: spot grid bot (pre-registered)
 
 Rules in [`docs/specs/2026-10-06-grid-preregistration.md`](docs/specs/2026-10-06-grid-preregistration.md),
@@ -116,7 +126,7 @@ An independent audit of the engine is in [`reports/phase1-audit.md`](reports/pha
 bot/         Binance Spot Testnet rebalancer (fake money)
 botcore/     strategy, risk and cost logic (pure functions, reusable by a live bot)
 research/    data download, universe, backtester, validation, tuning, report
-tests/       115 tests (pytest)
+tests/       123 tests (pytest)
 docs/        design spec, implementation plan, pre-registrations
 reports/     generated reports and charts
 ```
@@ -128,7 +138,7 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows  (source .venv/bin/activate on Linux/macOS)
 pip install -r requirements.txt
 
-pytest -q                          # 115 tests
+pytest -q                          # 123 tests
 
 python -m research.run_phase1 --trials 60          # full study: downloads data, writes reports/phase1-report.md
 python -m research.run_phase1 --skip-download --symbols BTCUSDT,ETHUSDT --max-single 0.5 \
