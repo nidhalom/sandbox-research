@@ -68,6 +68,22 @@ Period Sep 2020 – Sep 2026, so hold BTC made +37.7% a year here (max drawdown 
   holding BTC over 2020–2026; its 7-day direction calls were right 50.2% of the time, a coin flip.
   Report: [`reports/ml-report.md`](reports/ml-report.md).
 
+### Follow-up: five more ideas and a Testnet bot (pre-registered)
+
+Rules in [`docs/specs/2026-10-06-ideas-preregistration.md`](docs/specs/2026-10-06-ideas-preregistration.md);
+gold history before PAXG (2017–2020) comes from COMEX futures. Report with audit:
+[`reports/ideas-report.md`](reports/ideas-report.md).
+
+- **BTC + gold through the 2018 crash: NO-GO** for 30/70, 40/60 and 50/50 (drawdowns −43% to −59%).
+- **Crash brake** (half BTC above its 200-day average, otherwise all gold): **GO, but fragile.** 2019–2026:
+  +34.7% a year, drawdown −35%, Sharpe 1.21 vs 0.96 for holding BTC. Its Sharpe ties the simple 50/50 mix,
+  a one-day delay would fail it, and it relies on gold; the smaller drawdown is the robust part.
+- **Volatility scaling, plain and AI-forecast: NO-GO.** The AI forecast of volatility was less accurate
+  than plain 30-day volatility.
+- **Monthly contributions** lowered the worst case on the owner's plan (informational).
+- **`bot/testnet.py`**: rebalances the crash-brake strategy on the Binance Spot **Testnet** (fake money),
+  dry run by default, tracks only its own positions.
+
 ## Biases caught along the way
 
 | Problem | Effect if ignored | Fix |
@@ -85,9 +101,10 @@ An independent audit of the engine is in [`reports/phase1-audit.md`](reports/pha
 ## Project layout
 
 ```
+bot/         Binance Spot Testnet rebalancer (fake money)
 botcore/     strategy, risk and cost logic (pure functions, reusable by a live bot)
 research/    data download, universe, backtester, validation, tuning, report
-tests/       86 tests (pytest)
+tests/       103 tests (pytest)
 docs/        design spec, implementation plan, pre-registrations
 reports/     generated reports and charts
 ```
@@ -99,13 +116,15 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows  (source .venv/bin/activate on Linux/macOS)
 pip install -r requirements.txt
 
-pytest -q                          # 86 tests
+pytest -q                          # 103 tests
 
 python -m research.run_phase1 --trials 60          # full study: downloads data, writes reports/phase1-report.md
 python -m research.run_phase1 --skip-download --symbols BTCUSDT,ETHUSDT --max-single 0.5 \
        --primary untuned --report btc-eth --title "BTC + ETH Pre-registered Experiment"
 python -m research.run_core                        # BTC + gold core and holding rules
 python -m research.run_ml                          # CPU machine-learning test
+python -m research.run_ideas                       # ideas 1-5 (needs data/gold_gc_yahoo.json)
+python -m bot.testnet                              # Testnet rebalancer, dry run (add --live with Testnet keys)
 ```
 
 The first run downloads about 35 MB of data from `data.binance.vision`. The full study takes about
