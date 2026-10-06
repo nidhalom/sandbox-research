@@ -12,3 +12,4 @@ bot/runs.csv
 bot/state-*.json
 bot/fills-*.csv
 bot/runs-*.csv
+bot/cron.log
