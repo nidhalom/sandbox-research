@@ -173,9 +173,22 @@ def main(argv=None) -> None:
     ap.add_argument("--budget", type=float, default=3000.0, help="USDT the strategy starts with")
     ap.add_argument("--strategy", choices=("brake", "fixed"), default="brake")
     ap.add_argument("--gold", choices=("PAXG", "XAUT"), default="PAXG")
+    ap.add_argument("--check", action="store_true", help="only test the keys (read-only account call)")
     args = ap.parse_args(argv)
     env = load_env()
     key, secret = env.get("BINANCE_TESTNET_KEY"), env.get("BINANCE_TESTNET_SECRET")
+    if args.check:
+        if not (key and secret):
+            raise SystemExit("No BINANCE_TESTNET_KEY / BINANCE_TESTNET_SECRET in .env")
+        try:
+            acct = Testnet(key, secret)._call("GET", "/api/v3/account", signed=True)
+        except RuntimeError as e:
+            raise SystemExit(f"Keys rejected by the Testnet: {e}
+(-2014/-2015 usually means a real Binance key, "
+                             "which does not work on the Testnet: create one at https://testnet.binance.vision)")
+        held = {b["asset"]: b["free"] for b in acct["balances"] if b["asset"] in ("USDT", "BTC", "PAXG", "XAUT")}
+        print("Keys work on the Testnet. canTrade:", acct.get("canTrade"), "| balances:", held)
+        return
     if args.live and not (key and secret):
         raise SystemExit("--live needs BINANCE_TESTNET_KEY and BINANCE_TESTNET_SECRET in .env")
     assets = ("BTC", args.gold)
