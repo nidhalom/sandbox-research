@@ -7,6 +7,7 @@ import pandas as pd
 
 from botcore.metrics import summary
 from botcore.portfolio import COST, simulate
+from research.run_phase1 import chart, table, yearly_table
 
 PLAN = [(0, 2000.0), (3, 500.0), (6, 500.0)]
 STAGED_ENTRY = [(m, 500.0) for m in range(6)]
@@ -97,3 +98,113 @@ def core_verdict(s, btc, b3) -> list[str]:
     if s["sharpe"] <= b3["sharpe"]:
         fails.append("Sharpe not above 50/50 never rebalanced")
     return fails
+
+STRATS = {
+    "A1 50/50 quarterly": ({"BTC": 0.5, "PAXG": 0.5}, "quarterly"),
+    "A2 50/50 band 40-60%": ({"BTC": 0.5, "PAXG": 0.5}, "band"),
+    "B1 Hold BTC": ({"BTC": 1.0}, "none"),
+    "B2 Hold PAXG": ({"PAXG": 1.0}, "none"),
+    "B3 50/50 never rebalanced": ({"BTC": 0.5, "PAXG": 0.5}, "none"),
+}
+FMT_FULL = {"cagr": "+.1%", "max_dd": ".1%", "sharpe": ".2f"}
+FMT_ROLL = {"p10": "+.0%", "median": "+.0%", "p90": "+.0%", "worst": "+.0%", "lose": ".0%",
+            "windows": "d", "independent": "d"}
+
+
+def weekly_starts(index, first, horizon):
+    return [s for s in pd.date_range(first, index[-1], freq="W-MON")
+            if months_later(index, s, horizon) is not None]
+
+
+def rolling(prices, weights, rule, starts, schedule, exit_rule, horizon):
+    gains = [plan_gain(prices, weights, rule, s, schedule, exit_rule, horizon) for s in starts]
+    return describe(gains, starts, horizon)
+
+
+def main(argv=None) -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", default="data/spot_1d")
+    args = ap.parse_args(argv)
+    both = load_closes(args.data, ["BTC", "PAXG"]).loc[START:]
+    btc_long = load_closes(args.data, ["BTC"])
+
+    rets = {n: full_period_returns(both[list(w)], w, r) for n, (w, r) in STRATS.items()}
+    full = {n: summary(r) for n, r in rets.items()}
+    btc, b3 = full["B1 Hold BTC"], full["B3 50/50 never rebalanced"]
+    verdicts = {n: core_verdict(full[n], btc, b3) for n in ("A1 50/50 quarterly", "A2 50/50 band 40-60%")}
+
+    def verdict_text(fails):
+        if not fails:
+            return "**GO** (Testnet paper trading only)"
+        if fails == ["Sharpe not above 50/50 never rebalanced"]:
+            return "**NO-GO**: rebalancing adds nothing; prefer B3"
+        return "**NO-GO**: " + "; ".join(fails)
+
+    passing = [n for n, f in verdicts.items() if not f]
+    winner = max(passing, key=lambda n: full[n]["sharpe"]) if passing else "B3 50/50 never rebalanced"
+
+    starts30 = weekly_starts(both.index, START, 30)
+    roll1 = {}
+    for n, (w, r) in STRATS.items():
+        for h in (12, 24, 30):
+            roll1[f"{n}, {h}m"] = rolling(both[list(w)], w, r, starts30, PLAN, exit_fixed(h), h)
+
+    roll2 = {}
+    for n in (winner, "B1 Hold BTC"):
+        w, r = STRATS[n]
+        px = both[list(w)]
+        roll2[f"{n}: H1 sell at 30m"] = roll1[f"{n}, 30m"]
+        for h in (24, 30):
+            roll2[f"{n}: H2 staged exit, {h}m"] = rolling(px, w, r, starts30, PLAN, exit_staged(h), h)
+        roll2[f"{n}: H3 half at +30%, rest 30m"] = rolling(px, w, r, starts30, PLAN, exit_half_at_target(30, 0.30), 30)
+        roll2[f"{n}: H4 staged entry, 30m"] = rolling(px, w, r, starts30, STAGED_ENTRY, exit_fixed(30), 30)
+        s48 = weekly_starts(px.index, START, 48)
+        if s48:
+            roll2[f"{n}: H1 sell at 48m (2020+ starts)"] = rolling(px, w, r, s48, PLAN, exit_fixed(48), 48)
+    s48b = weekly_starts(btc_long.index, "2017-09-01", 48)
+    roll2["B1 Hold BTC: H1 sell at 48m (2017+ starts)"] = rolling(btc_long, {"BTC": 1.0}, "none", s48b, PLAN, exit_fixed(48), 48)
+    roll2["B1 Hold BTC: H1 sell at 30m (2017+ starts)"] = rolling(
+        btc_long, {"BTC": 1.0}, "none", weekly_starts(btc_long.index, "2017-09-01", 30), PLAN, exit_fixed(30), 30)
+
+    chart(rets, Path("reports/core-equity.png"))
+    md = [
+        "# BTC + Gold Core and Holding Rules — Results",
+        "",
+        "Pre-registration: `docs/specs/2026-10-06-core-and-ml-preregistration.md` (rules fixed before this run).",
+        f"Period {both.index[0].date()} → {both.index[-1].date()}. Costs 0.15% per traded dollar. Cash earns 0%.",
+        "**Not a clean out-of-sample test** (data seen before; gold rose about +110%). Not financial advice.",
+        "",
+        "## Part 1 — Verdicts",
+        "",
+        *[f"- {n}: {verdict_text(f)}" for n, f in verdicts.items()],
+        "",
+        "## Full period (single deposit)",
+        "",
+        table(full, FMT_FULL),
+        "",
+        "Reference, BTC+ETH trend bot (2021-01 → 2026-09, `reports/btc-eth-report.md`): +2.9%/yr, max DD −25%, Sharpe 0.28.",
+        "",
+        "![equity](core-equity.png)",
+        "",
+        "## Yearly returns",
+        "",
+        yearly_table(rets),
+        "",
+        "## Owner's $3,000 plan — sell at a fixed month (same start dates for all horizons)",
+        "",
+        "Weekly start dates heavily overlap; `independent` = non-overlapping windows.",
+        "",
+        table(roll1, FMT_ROLL),
+        "",
+        f"## Part 2 — Holding rules (informational), on {winner} and hold BTC",
+        "",
+        table(roll2, FMT_ROLL),
+        "",
+        "48-month rows rest on very few independent windows and cannot support a conclusion on their own.",
+    ]
+    Path("reports/core-report.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    print("wrote reports/core-report.md")
+
+
+if __name__ == "__main__":
+    main()
