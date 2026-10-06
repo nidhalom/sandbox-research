@@ -71,3 +71,23 @@ Gain is on total money deposited. Weekly starts from 2017-09, heavily overlappin
 | 50/50 quarterly, plan only ($3,000) | +32% | +128% | +358% | -14% | 4% | 343 | 3 |
 | 50/50 quarterly, plan + $100/month ($5,300) | +29% | +80% | +255% | -7% | 3% | 343 | 3 |
 
+
+## Audit (2026-10-06, after the run; informational, does not change the verdicts)
+
+Checks run after the results, so they cannot be used to pick a better rule. They test how fragile the
+idea 5 GO is.
+
+| Check | Result |
+|---|---|
+| Independent re-implementation of idea 5 (plain loop) | CAGR +35.0%, DD −35.1%, Sharpe 1.21. Matches; the small gap comes from the start: the engine buys the day-1 target (BTC was below its 200-day average on 2019-01-01, so 100% gold), the check started 50/50 |
+| Trade one day later (decide at close, fill next close) | Sharpe 1.17, DD −36.0%: **would fail "Sharpe > A1" (1.21)** |
+| Moving average 100 / 150 / 250 / 300 days | Sharpe 1.46 / 1.28 / 1.13 / 1.13; DD −33.7% / −32.7% / **−46.3%** / −38.6%: the drawdown pass depends on the length |
+| Block bootstrap, Sharpe(idea 5) − Sharpe(A1) | 90% CI −0.32 to +0.33; idea 5 higher in 51% of resamples: **a tie** |
+| Block bootstrap, max drawdown idea 5 vs A1 | Idea 5 shallower in 86% of resamples: the drop protection is the robust part |
+| Brake into cash instead of gold | Sharpe 0.94 (below hold BTC 0.96): **gold carries much of the result** |
+| Through the 2018 crash (2018-03-05 → 2020-08-31) | Idea 5 Sharpe 0.75, DD −27.7% vs A1 0.62, −41.5% vs BTC 0.39, −70.0% |
+
+**Conclusion:** idea 5 passed the pre-registered rules, but only by a hair on Sharpe (1.2062 vs 1.2059).
+What looks real is the smaller drawdown, including through 2018. Treat it as a candidate for Testnet
+paper trading, not as a proven edge. The AI volatility forecast was worse than the simple 30-day
+volatility (error 0.220 vs 0.190).

@@ -6,3 +6,4 @@ archive/
 .env
 .superpowers/
 *.log
+bot/state.json

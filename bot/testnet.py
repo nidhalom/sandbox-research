@@ -24,6 +24,7 @@ BASE = "https://testnet.binance.vision"
 SIGNAL_URL = "https://api.binance.com/api/v3/klines?symbol=BTCUSDT&interval=1d&limit=202"
 ASSETS = ("BTC", "PAXG")
 BASE_W = 0.5
+STATE = Path("bot/state.json")  # the strategy's own cash and coins (gitignored)
 
 
 def sign(query: str, secret: str) -> str:
@@ -49,6 +50,24 @@ def signal_weights(closes: pd.Series) -> dict:
         raise ValueError("need at least 200 closed daily candles")
     btc = BASE_W if closes.iloc[-1] >= closes.iloc[-200:].mean() else 0.0
     return {"BTC": btc, "PAXG": 1.0 - btc}
+
+
+def load_state(path=STATE, budget: float = 3000.0) -> dict:
+    """What the strategy owns. Testnet accounts start with free coins, so the wallet is not the strategy."""
+    p = Path(path)
+    if p.exists():
+        return json.loads(p.read_text())
+    return {"cash": budget, **dict.fromkeys(ASSETS, 0.0)}
+
+
+def save_state(path, state: dict) -> None:
+    Path(path).write_text(json.dumps(state, indent=2))
+
+
+def apply_fill(state: dict, symbol: str, side: str, resp: dict) -> dict:
+    asset, qty, quote = symbol.removesuffix("USDT"), float(resp["executedQty"]), float(resp["cummulativeQuoteQty"])
+    sign_ = 1 if side == "BUY" else -1
+    return {**state, asset: state[asset] + sign_ * qty, "cash": state["cash"] - sign_ * quote}
 
 
 def _get_json(url: str):
@@ -111,16 +130,12 @@ def main(argv=None) -> None:
     targets = signal_weights(btc_daily_closes())
     client = Testnet(key or "", secret or "")
     prices = client.prices()
-    if key and secret:
-        bal = client.balances()
-        holdings = {a: bal.get(a, 0.0) for a in ASSETS}
-        held = sum(holdings[a] * prices[a] for a in ASSETS)
-        cash = max(0.0, min(bal.get("USDT", 0.0), args.budget - held))
-    else:
-        if args.live:
-            raise SystemExit("--live needs BINANCE_TESTNET_KEY and BINANCE_TESTNET_SECRET in .env")
-        holdings, cash = dict.fromkeys(ASSETS, 0.0), args.budget
-        print("No Testnet keys found: dry run with a sample $%.0f in cash." % cash)
+    if args.live and not (key and secret):
+        raise SystemExit("--live needs BINANCE_TESTNET_KEY and BINANCE_TESTNET_SECRET in .env")
+    state = load_state(STATE, args.budget)
+    holdings, cash = {a: state[a] for a in ASSETS}, state["cash"]
+    value = cash + sum(holdings[a] * prices[a] for a in ASSETS)
+    print(f"Strategy holds {holdings} + {cash:.2f} USDT = {value:.2f} USDT (from {STATE})")
     print("Target weights:", targets, "| prices:", prices)
     orders = plan_orders(holdings, prices, targets, cash)
     if not orders:
@@ -130,6 +145,8 @@ def main(argv=None) -> None:
         if args.live:
             r = client.market_order(o["symbol"], o["side"], o["quote_qty"])
             print("  ->", r.get("status"), "filled", r.get("executedQty"), "for", r.get("cummulativeQuoteQty"))
+            state = apply_fill(state, o["symbol"], o["side"], r)
+            save_state(STATE, state)  # after every fill, so a failed later order loses nothing
 
 
 if __name__ == "__main__":

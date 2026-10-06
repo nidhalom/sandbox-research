@@ -57,3 +57,14 @@ def test_load_env_reads_keys_and_ignores_comments(tmp_path):
     p.write_text("# testnet\nBINANCE_TESTNET_KEY=abc\nBINANCE_TESTNET_SECRET = 'xyz'\n")
     assert load_env(p) == {"BINANCE_TESTNET_KEY": "abc", "BINANCE_TESTNET_SECRET": "xyz"}
     assert load_env(tmp_path / "missing.env") == {}
+
+
+def test_strategy_tracks_only_its_own_positions(tmp_path):
+    from bot.testnet import apply_fill, load_state, save_state
+    path = tmp_path / "state.json"
+    s = load_state(path, budget=3000.0)
+    assert s == {"cash": 3000.0, "BTC": 0.0, "PAXG": 0.0}
+    s = apply_fill(s, "BTCUSDT", "BUY", {"executedQty": "0.0175", "cummulativeQuoteQty": "1492.50"})
+    s = apply_fill(s, "BTCUSDT", "SELL", {"executedQty": "0.0075", "cummulativeQuoteQty": "640.00"})
+    save_state(path, s)
+    assert load_state(path, budget=999.0) == pytest.approx({"cash": 3000.0 - 1492.5 + 640.0, "BTC": 0.01, "PAXG": 0.0})
