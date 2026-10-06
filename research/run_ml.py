@@ -6,6 +6,9 @@ import pandas as pd
 
 from botcore.metrics import summary
 from botcore.portfolio import COST
+from research.run_phase1 import chart, table, yearly_table
+from research.sentiment import load_fear_greed
+from research.validation import bootstrap_ci
 
 HORIZON = 7
 THRESHOLD = 0.55
@@ -70,3 +73,50 @@ def ml_verdict(r, btc_r, ci) -> list[str]:
     if s["sharpe"] <= summary(btc_r)["sharpe"]:
         fails.append("Sharpe not above hold BTC")
     return fails
+
+def main(argv=None) -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--data", default="data/spot_1d")
+    args = ap.parse_args(argv)
+    close = pd.read_parquet(Path(args.data) / "BTCUSDT.parquet").set_index("date")["close"]
+    close.index = pd.to_datetime(close.index)
+    close = close.loc[:"2026-09-30"]
+    fng = load_fear_greed("data/fear_greed.csv")
+    proba = walk_forward_proba(make_features(close, fng), make_target(close))
+    r = strategy_returns(close, proba)
+    btc = close.pct_change().reindex(r.index).fillna(0)
+    ci = bootstrap_ci(r)
+    fails = ml_verdict(r, btc, ci)
+    pos = (proba > THRESHOLD).astype(float)
+    hit = ((proba > 0.5) == (make_target(close).reindex(proba.index) == 1.0))[make_target(close).reindex(proba.index).notna()]
+    rows = {"ML model": summary(r), "Hold BTC": summary(btc)}
+    chart({"ML model": r, "Hold BTC": btc}, Path("reports/ml-equity.png"))
+    md = [
+        "# CPU Machine-Learning Test on BTC — Results",
+        "",
+        "Pre-registration: `docs/specs/2026-10-06-core-and-ml-preregistration.md` (rules fixed before this run).",
+        f"Test {r.index[0].date()} → {r.index[-1].date()}, walk-forward yearly retraining, costs 0.15% per switch.",
+        "One fixed configuration, no tuning loop, so PBO is not computed.",
+        "",
+        "## Verdict",
+        "",
+        "**GO** (Testnet paper trading only)" if not fails else "**NO-GO**: " + "; ".join(fails),
+        "",
+        table(rows, {"cagr": "+.1%", "max_dd": ".1%", "sharpe": ".2f"}),
+        "",
+        f"Sharpe 90% bootstrap CI: {ci['sharpe'][0]:.2f} to {ci['sharpe'][1]:.2f}. "
+        f"Time in market: {pos.mean():.0%}. Switches: {int(pos.diff().abs().sum())}. "
+        f"Direction hit rate (P>0.5 vs actual 7-day move): {hit.mean():.1%}.",
+        "",
+        "![equity](ml-equity.png)",
+        "",
+        "## Yearly returns",
+        "",
+        yearly_table({"ML model": r, "Hold BTC": btc}),
+    ]
+    Path("reports/ml-report.md").write_text("\n".join(md) + "\n", encoding="utf-8")
+    print("wrote reports/ml-report.md")
+
+
+if __name__ == "__main__":
+    main()

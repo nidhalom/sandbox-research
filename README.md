@@ -51,6 +51,23 @@ Verdict: **NO-GO**. The fixed rules made **+2.9% a year** (max drawdown −25%, 
 +20.3% for holding BTC. It cut the 2022 crash from −64% to −15%, but missed most of the 2023–24 rally.
 Full report: [`reports/btc-eth-report.md`](reports/btc-eth-report.md).
 
+### Follow-up: BTC + gold core, holding rules and CPU ML (pre-registered)
+
+Rules fixed before the runs in
+[`docs/specs/2026-10-06-core-and-ml-preregistration.md`](docs/specs/2026-10-06-core-and-ml-preregistration.md).
+Period Sep 2020 – Sep 2026, so hold BTC made +37.7% a year here (max drawdown −77%, Sharpe 0.85).
+
+- **BTC + gold (PAXG) 50/50, rebalanced quarterly: NO-GO, but closest yet.** +35.4% a year, Sharpe 1.11
+  (better than holding BTC), yet its max drawdown of −49.5% broke the pre-set −40% limit. Band
+  rebalancing (40–60%): +31.3%, Sharpe 1.02, drawdown −50.3%. Gold's +110% run flatters both.
+  Report: [`reports/core-report.md`](reports/core-report.md).
+- **Holding rules (informational):** on the owner's $3,000 plan, holding longer mattered most; selling half
+  at +30% cut the share of losing windows but gave up upside; staged exits did not help and staged entry was
+  slightly worse (more losing windows).
+- **Gradient-boosting model on BTC, CPU only: NO-GO.** +0.5% a year (Sharpe 0.25) against +43.8% for
+  holding BTC over 2020–2026; its 7-day direction calls were right 50.2% of the time, a coin flip.
+  Report: [`reports/ml-report.md`](reports/ml-report.md).
+
 ## Biases caught along the way
 
 | Problem | Effect if ignored | Fix |
@@ -70,7 +87,7 @@ An independent audit of the engine is in [`reports/phase1-audit.md`](reports/pha
 ```
 botcore/     strategy, risk and cost logic (pure functions, reusable by a live bot)
 research/    data download, universe, backtester, validation, tuning, report
-tests/       66 tests (pytest)
+tests/       86 tests (pytest)
 docs/        design spec, implementation plan, pre-registrations
 reports/     generated reports and charts
 ```
@@ -82,11 +99,13 @@ python -m venv .venv
 .venv\Scripts\activate            # Windows  (source .venv/bin/activate on Linux/macOS)
 pip install -r requirements.txt
 
-pytest -q                          # 66 tests
+pytest -q                          # 86 tests
 
 python -m research.run_phase1 --trials 60          # full study: downloads data, writes reports/phase1-report.md
 python -m research.run_phase1 --skip-download --symbols BTCUSDT,ETHUSDT --max-single 0.5 \
        --primary untuned --report btc-eth --title "BTC + ETH Pre-registered Experiment"
+python -m research.run_core                        # BTC + gold core and holding rules
+python -m research.run_ml                          # CPU machine-learning test
 ```
 
 The first run downloads about 35 MB of data from `data.binance.vision`. The full study takes about
@@ -94,7 +113,7 @@ The first run downloads about 35 MB of data from `data.binance.vision`. The full
 
 ## Tech
 
-Python 3.12 · pandas · NumPy · SciPy · Optuna · Matplotlib · pytest
+Python 3.12 · pandas · NumPy · SciPy · scikit-learn · Optuna · Matplotlib · pytest
 
 ## Disclaimer
 
