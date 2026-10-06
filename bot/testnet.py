@@ -7,7 +7,7 @@ Usage (from anywhere):
     python -m bot.testnet                     # dry run: prints the plan, sends nothing
     python -m bot.testnet --live              # sends MARKET orders to the Testnet (keys from .env)
 
-Run it on **Tuesday shortly after 00:00 UTC** (01:00 Algeria time), right after Monday's daily candle
+Run it on **Tuesday shortly after 00:00 UTC**, right after Monday's daily candle
 closes, and on the day after each quarter starts: that matches the backtest. `--live` refuses other
 days unless `--force`. Keys: create them at https://testnet.binance.vision, put BINANCE_TESTNET_KEY=...
 and BINANCE_TESTNET_SECRET=... in .env (gitignored). Never use real Binance keys.
